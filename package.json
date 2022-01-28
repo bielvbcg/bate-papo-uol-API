@@ -1,0 +1,27 @@
+{
+  "name": "bate-papo-uol-API",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bielvbcg/bate-papo-uol-API.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bielvbcg/bate-papo-uol-API/issues"
+  },
+  "homepage": "https://github.com/bielvbcg/bate-papo-uol-API#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.10.7",
+    "express": "^4.17.2",
+    "mongodb": "^4.3.1"
+  }
+}
