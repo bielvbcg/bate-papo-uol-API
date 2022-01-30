@@ -1,7 +1,7 @@
 import express from "express"
 import cors from "cors"
 import dayjs from 'dayjs';
-import { MongoClient } from "mongodb"
+import { MongoClient, ObjectId } from "mongodb"
 import joi from "joi"
 
 const server = express()
@@ -143,7 +143,7 @@ server.get('/messages', async (req, res) => {
     mongoClient.close()
 
   } catch (error) {
-    res.sendStatus(500)
+    res.status(500).send(error.message)
     mongoClient.close()
   }
 })
@@ -166,9 +166,8 @@ server.post("/status", async (req, res) => {
       return
     }
 
-    const usuarioAtual = usuarios.find(usuario => usuario.name === req.headers.user)
     await usuariosCollection.updateOne(
-      { name: usuarioAtual.name },
+      { name: req.headers.user },
       { $set: { lastStatus: Date.now() } }
     )
 
@@ -180,5 +179,38 @@ server.post("/status", async (req, res) => {
     mongoClient.close()
   }
 })
+
+setInterval(async () => {
+  const mongoClient = new MongoClient("mongodb://localhost:27017")
+
+  try {
+    await mongoClient.connect()
+    const db = mongoClient.db("bate-papo-uol")
+    const usuariosCollection = db.collection("usuarios")
+    const mensagensCollection = db.collection("mensagens")
+    const usuarios = await usuariosCollection.find({}).toArray()
+
+    for (let i = 0; i < usuarios.length; i++) {
+
+      if (Date.now() - usuarios[i].lastStatus > 15) {
+        await mongoClient.connect()
+        await usuariosCollection.deleteOne({ name: usuarios[i].name })
+        await mensagensCollection.insertOne(
+          {
+            from: usuarios[i].name,
+            to: "Todos",
+            text: "sai da sala...",
+            type: "status",
+            time: dayjs().format("HH:mm:ss")
+          })
+      }
+    }
+    mongoClient.close()
+
+  } catch (error) {
+    console.log(error.message)
+    mongoClient.close()
+  }
+}, 5000)
 
 server.listen(5000)
