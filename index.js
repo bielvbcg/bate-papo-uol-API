@@ -82,8 +82,6 @@ server.get("/participants", async (req, res) => {
 })
 
 server.post("/messages", async (req, res) => {
-  console.log(req.body)
-  console.log(req.headers.user)
 
   const validacao = mensagensSchema.validate(req.body, { abortEarly: false })
   if (validacao.error) {
@@ -113,9 +111,7 @@ server.post("/messages", async (req, res) => {
 
     await mensagensCollection.insertOne({
       from: req.headers.user,
-      to: req.body.to,
-      text: req.body.text,
-      type: req.body.type,
+      ...req.body,
       time: dayjs().format("HH:mm:ss")
     })
 
@@ -124,6 +120,63 @@ server.post("/messages", async (req, res) => {
 
   } catch (error) {
     res.sendStatus(500)
+    mongoClient.close()
+  }
+})
+
+server.get('/messages', async (req, res) => {
+  const mongoClient = new MongoClient("mongodb://localhost:27017")
+
+  try {
+    await mongoClient.connect()
+    const db = mongoClient.db("bate-papo-uol")
+    const mensagensCollection = db.collection("mensagens")
+    let mensagens = await mensagensCollection.find({}).toArray()
+    const usuario = req.headers.user
+
+    mensagens = mensagens.filter(({ type, from, to }) => type !== "private_message" || from === usuario || to === usuario || to === "Todos")
+
+    const limite = parseInt(req.query.limit)
+    if (limite) mensagens = mensagens.slice(0, limite)
+
+    res.status(200).send(mensagens)
+    mongoClient.close()
+
+  } catch (error) {
+    res.sendStatus(500)
+    mongoClient.close()
+  }
+})
+
+server.post("/status", async (req, res) => {
+
+  const mongoClient = new MongoClient("mongodb://localhost:27017")
+
+  try {
+    await mongoClient.connect()
+    const db = mongoClient.db("bate-papo-uol")
+    const usuariosCollection = db.collection("usuarios")
+    const usuarios = await usuariosCollection.find({}).toArray()
+
+    let usuarioEncontrado = false
+    usuarios.map(item => { if (item.name === req.headers.user) usuarioEncontrado = true })
+    if (!usuarioEncontrado) {
+      res.sendStatus(404)
+      mongoClient.close()
+      return
+    }
+
+    const usuarioAtual = usuarios.find(usuario => usuario.name === req.headers.user)
+    await usuariosCollection.updateOne(
+      { name: usuarioAtual.name },
+      { $set: { lastStatus: Date.now() } }
+    )
+
+    res.sendStatus(200)
+    mongoClient.close()
+
+  } catch (error) {
+    res.status(500).send(error.message)
     mongoClient.close()
   }
 })
