@@ -1,8 +1,9 @@
 import express from "express"
 import cors from "cors"
 import dayjs from 'dayjs';
-import { MongoClient, ObjectId } from "mongodb"
+import { MongoClient } from "mongodb"
 import joi from "joi"
+import { stripHtml } from "string-strip-html";
 
 const server = express()
 server.use(express.json())
@@ -14,6 +15,39 @@ const mensagensSchema = joi.object({
   text: joi.string().required(),
   type: joi.any().valid("message", "private_message")
 })
+
+setInterval(async () => {
+  const mongoClient = new MongoClient("mongodb://localhost:27017")
+
+  try {
+    await mongoClient.connect()
+    const db = mongoClient.db("bate-papo-uol-2")
+    const usuariosCollection = db.collection("usuarios")
+    const mensagensCollection = db.collection("mensagens")
+    const usuarios = await usuariosCollection.find({}).toArray()
+
+    for (let i = 0; i < usuarios.length; i++) {
+
+      if (Date.now() - usuarios[i].lastStatus > 10000) {
+
+        await usuariosCollection.deleteOne({ name: usuarios[i].name })
+        await mensagensCollection.insertOne(
+          {
+            from: usuarios[i].name,
+            to: "Todos",
+            text: "sai da sala...",
+            type: "status",
+            time: dayjs().format("HH:mm:ss")
+          })
+      }
+    }
+    mongoClient.close()
+
+  } catch (error) {
+    console.log(error.message)
+    mongoClient.close()
+  }
+}, 15000)
 
 server.post("/participants", async (req, res) => {
 
@@ -29,7 +63,7 @@ server.post("/participants", async (req, res) => {
 
   try {
     await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
+    const db = mongoClient.db("bate-papo-uol-2")
     const usuariosCollection = db.collection("usuarios")
     const mensagensCollection = db.collection("mensagens")
 
@@ -43,7 +77,7 @@ server.post("/participants", async (req, res) => {
       return
     }
 
-    await usuariosCollection.insertOne({ name: req.body.name, lastStatus: Date.now() })
+    await usuariosCollection.insertOne({ name: stripHtml(req.body.name).result.trim(), lastStatus: Date.now() })
 
     await mensagensCollection.insertOne(
       {
@@ -68,7 +102,7 @@ server.get("/participants", async (req, res) => {
 
   try {
     await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
+    const db = mongoClient.db("bate-papo-uol-2")
     const usuariosCollection = db.collection("usuarios")
     const usuarios = await usuariosCollection.find({}).toArray()
 
@@ -95,7 +129,7 @@ server.post("/messages", async (req, res) => {
 
   try {
     await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
+    const db = mongoClient.db("bate-papo-uol-2")
     const usuariosCollection = db.collection("usuarios")
     const mensagensCollection = db.collection("mensagens")
 
@@ -109,9 +143,15 @@ server.post("/messages", async (req, res) => {
       return
     }
 
+    console.log(stripHtml(req.body.text).result.trim())
+
+    const mensagem = stripHtml(req.body.text).result.trim()
+
     await mensagensCollection.insertOne({
       from: req.headers.user,
-      ...req.body,
+      to: req.body.to,
+      text: mensagem,
+      type: req.body.type,
       time: dayjs().format("HH:mm:ss")
     })
 
@@ -119,7 +159,7 @@ server.post("/messages", async (req, res) => {
     mongoClient.close()
 
   } catch (error) {
-    res.sendStatus(500)
+    res.status(500).send(error.message)
     mongoClient.close()
   }
 })
@@ -129,7 +169,7 @@ server.get('/messages', async (req, res) => {
 
   try {
     await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
+    const db = mongoClient.db("bate-papo-uol-2")
     const mensagensCollection = db.collection("mensagens")
     let mensagens = await mensagensCollection.find({}).toArray()
     const usuario = req.headers.user
@@ -154,7 +194,7 @@ server.post("/status", async (req, res) => {
 
   try {
     await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
+    const db = mongoClient.db("bate-papo-uol-2")
     const usuariosCollection = db.collection("usuarios")
     const usuarios = await usuariosCollection.find({}).toArray()
 
@@ -179,38 +219,5 @@ server.post("/status", async (req, res) => {
     mongoClient.close()
   }
 })
-
-setInterval(async () => {
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
-
-  try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol")
-    const usuariosCollection = db.collection("usuarios")
-    const mensagensCollection = db.collection("mensagens")
-    const usuarios = await usuariosCollection.find({}).toArray()
-
-    for (let i = 0; i < usuarios.length; i++) {
-
-      if (Date.now() - usuarios[i].lastStatus > 15) {
-        await mongoClient.connect()
-        await usuariosCollection.deleteOne({ name: usuarios[i].name })
-        await mensagensCollection.insertOne(
-          {
-            from: usuarios[i].name,
-            to: "Todos",
-            text: "sai da sala...",
-            type: "status",
-            time: dayjs().format("HH:mm:ss")
-          })
-      }
-    }
-    mongoClient.close()
-
-  } catch (error) {
-    console.log(error.message)
-    mongoClient.close()
-  }
-}, 5000)
 
 server.listen(5000)
