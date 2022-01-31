@@ -4,10 +4,12 @@ import dayjs from 'dayjs';
 import { MongoClient } from "mongodb"
 import joi from "joi"
 import { stripHtml } from "string-strip-html";
+import dotenv from "dotenv";
 
 const server = express()
 server.use(express.json())
 server.use(cors())
+dotenv.config();
 
 const usuarioSchema = joi.object({ name: joi.string().required() })
 const mensagensSchema = joi.object({
@@ -17,7 +19,7 @@ const mensagensSchema = joi.object({
 })
 
 setInterval(async () => {
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
@@ -59,7 +61,7 @@ server.post("/participants", async (req, res) => {
     return
   }
 
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
@@ -78,7 +80,6 @@ server.post("/participants", async (req, res) => {
     }
 
     await usuariosCollection.insertOne({ name: stripHtml(req.body.name).result.trim(), lastStatus: Date.now() })
-
     await mensagensCollection.insertOne(
       {
         from: req.body.name,
@@ -98,7 +99,7 @@ server.post("/participants", async (req, res) => {
 })
 
 server.get("/participants", async (req, res) => {
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
@@ -125,7 +126,7 @@ server.post("/messages", async (req, res) => {
     return
   }
 
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
@@ -143,15 +144,15 @@ server.post("/messages", async (req, res) => {
       return
     }
 
-    console.log(stripHtml(req.body.text).result.trim())
-
-    const mensagem = stripHtml(req.body.text).result.trim()
+    const mensagem = {
+      to: stripHtml(req.body.to).result.trim(),
+      text: stripHtml(req.body.text).result.trim(),
+      type: stripHtml(req.body.type).result.trim()
+    }
 
     await mensagensCollection.insertOne({
       from: req.headers.user,
-      to: req.body.to,
-      text: mensagem,
-      type: req.body.type,
+      ...mensagem,
       time: dayjs().format("HH:mm:ss")
     })
 
@@ -165,7 +166,7 @@ server.post("/messages", async (req, res) => {
 })
 
 server.get('/messages', async (req, res) => {
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
@@ -190,7 +191,7 @@ server.get('/messages', async (req, res) => {
 
 server.post("/status", async (req, res) => {
 
-  const mongoClient = new MongoClient("mongodb://localhost:27017")
+  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
     await mongoClient.connect()
