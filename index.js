@@ -1,7 +1,7 @@
 import express from "express"
 import cors from "cors"
 import dayjs from 'dayjs';
-import { MongoClient } from "mongodb"
+import { MongoClient, ObjectId } from "mongodb"
 import joi from "joi"
 import { stripHtml } from "string-strip-html";
 import dotenv from "dotenv";
@@ -11,6 +11,17 @@ server.use(express.json())
 server.use(cors())
 dotenv.config();
 
+let db;
+let usuariosCollection;
+let mensagensCollection;
+
+const mongoClient = new MongoClient(process.env.MONGO_URI)
+mongoClient.connect().then(async () => {
+  db = mongoClient.db("bate-papo-uol-3")
+  usuariosCollection = db.collection("usuarios")
+  mensagensCollection = db.collection("mensagens")
+})
+
 const usuarioSchema = joi.object({ name: joi.string().required() })
 const mensagensSchema = joi.object({
   to: joi.string().required(),
@@ -19,13 +30,8 @@ const mensagensSchema = joi.object({
 })
 
 setInterval(async () => {
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const usuariosCollection = db.collection("usuarios")
-    const mensagensCollection = db.collection("mensagens")
     const usuarios = await usuariosCollection.find({}).toArray()
 
     for (let i = 0; i < usuarios.length; i++) {
@@ -43,11 +49,8 @@ setInterval(async () => {
           })
       }
     }
-    mongoClient.close()
-
   } catch (error) {
     console.log(error.message)
-    mongoClient.close()
   }
 }, 15000)
 
@@ -61,14 +64,8 @@ server.post("/participants", async (req, res) => {
     return
   }
 
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
 
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const usuariosCollection = db.collection("usuarios")
-    const mensagensCollection = db.collection("mensagens")
-
     let usuarioExistente = false
     const usuarios = await usuariosCollection.find({}).toArray()
     usuarios.map(item => { if (item.name === req.body.name) usuarioExistente = true })
@@ -90,29 +87,20 @@ server.post("/participants", async (req, res) => {
       })
 
     res.sendStatus(201)
-    mongoClient.close()
 
   } catch (error) {
     res.send(error)
-    mongoClient.close()
   }
 })
 
 server.get("/participants", async (req, res) => {
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
-
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const usuariosCollection = db.collection("usuarios")
     const usuarios = await usuariosCollection.find({}).toArray()
 
     res.status(200).send(usuarios)
-    mongoClient.close()
 
   } catch (error) {
     res.sendStatus(500)
-    mongoClient.close()
   }
 })
 
@@ -126,14 +114,7 @@ server.post("/messages", async (req, res) => {
     return
   }
 
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
-
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const usuariosCollection = db.collection("usuarios")
-    const mensagensCollection = db.collection("mensagens")
-
     let usuarioEncontrado = false
     const usuarios = await usuariosCollection.find({}).toArray()
     usuarios.map(item => { if (item.name === req.headers.user) usuarioEncontrado = true })
@@ -157,21 +138,14 @@ server.post("/messages", async (req, res) => {
     })
 
     res.sendStatus(201)
-    mongoClient.close()
 
   } catch (error) {
     res.status(500).send(error.message)
-    mongoClient.close()
   }
 })
 
 server.get('/messages', async (req, res) => {
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
-
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const mensagensCollection = db.collection("mensagens")
     let mensagens = await mensagensCollection.find({}).toArray()
     const usuario = req.headers.user
 
@@ -181,29 +155,20 @@ server.get('/messages', async (req, res) => {
     if (limite) mensagens = mensagens.slice(0, limite)
 
     res.status(200).send(mensagens)
-    mongoClient.close()
 
   } catch (error) {
     res.status(500).send(error.message)
-    mongoClient.close()
   }
 })
 
 server.post("/status", async (req, res) => {
-
-  const mongoClient = new MongoClient(process.env.MONGO_URI)
-
   try {
-    await mongoClient.connect()
-    const db = mongoClient.db("bate-papo-uol-2")
-    const usuariosCollection = db.collection("usuarios")
     const usuarios = await usuariosCollection.find({}).toArray()
 
     let usuarioEncontrado = false
     usuarios.map(item => { if (item.name === req.headers.user) usuarioEncontrado = true })
     if (!usuarioEncontrado) {
       res.sendStatus(404)
-      mongoClient.close()
       return
     }
 
@@ -213,11 +178,30 @@ server.post("/status", async (req, res) => {
     )
 
     res.sendStatus(200)
-    mongoClient.close()
 
   } catch (error) {
     res.status(500).send(error.message)
-    mongoClient.close()
+  }
+})
+
+server.delete("/messages/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mensagem = await mensagensCollection.findOne({ _id: new ObjectId(id) })
+
+    if (!mensagem) {
+      res.sendStatus(404)
+    }
+    if (mensagem.from !== req.headers.user) {
+      res.sendStatus(401)
+    }
+
+    await mensagensCollection.deleteOne({ _id: new ObjectId(id) })
+
+    res.sendStatus(200)
+
+  } catch (error) {
+    res.status(500).send(error.message)
   }
 })
 
